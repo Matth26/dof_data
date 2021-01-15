@@ -28,8 +28,8 @@ def get_last_obj_prices(obj_type):
 ####################################################################################################
 # obj_row: a row in the matrix returned by get_last_obj_prices function
 # return the datetime python object
-def get_last_update_datetime(obj_row):
-	return datetime.strptime(obj_row[3].replace('-', '/'), '%d/%m/%Y %H:%M:%S')
+def get_datetime_from_string(date_str):
+	return datetime.strptime(date_str.replace('-', '/'), '%d/%m/%Y %H:%M:%S')
 
 ####################################################################################################
 # take a raw_name (raw because from sikuli), and a list of name where it will check for filtering
@@ -76,6 +76,10 @@ def parse_csv_file(filename, list_name, list_type):
 		csvReader = csv.reader(csvfile, delimiter=';')
 		for row in csvReader:
 			#print(row)
+			if(len(row)<14):
+				print(row)
+				print(colored("len(row) <= 14 name = %s" %(row[0]), 'red'))
+				continue
 			arr = []
 
 			name_raw = row[0]
@@ -85,7 +89,7 @@ def parse_csv_file(filename, list_name, list_type):
 			if(filtered_name == ""):
 				continue
 			elif (filtered_name == "?"):
-				not_imported_list.append(name_raw)
+				not_imported_list.append([name_raw])
 				continue
 
 			type_raw = row[1]
@@ -109,7 +113,7 @@ def parse_csv_file(filename, list_name, list_type):
 
 			#=====================================================
 			# Now specific if item or rcs:
-			if(len(row) == 14):
+			if(len(row) == 14): # rcs
 				price_1_raw = row[11].replace(" ", "")
 				price_1 = "-"
 				if(price_1_raw.isdigit()):
@@ -129,11 +133,11 @@ def parse_csv_file(filename, list_name, list_type):
 				arr.append(price_100)
 
 				arr.append(get_min_price(price_1, price_10, price_100))
-			else:
+			else: # items
 				row_size = len(row)
 				for i in range(11, row_size):
 					price_raw = row[i].replace(" ", "")
-					price = "-"
+					price = ""
 					if(price_raw.isdigit()):
 						price = int(price_raw)
 					arr.append(price)
