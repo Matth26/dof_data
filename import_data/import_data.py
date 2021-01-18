@@ -1,14 +1,90 @@
 import re
 import os
+import git
 import csv
 import glob
 import urllib
 import pygsheets
+import statistics
 
+from os import path
 from bs4 import BeautifulSoup
 from termcolor import colored
 from datetime import datetime
 from Levenshtein import distance as levenshtein_distance
+
+def pull_new_data(g):
+	g.pull('origin', 'petitOrdi')
+	g.pull('origin', 'lamGPU')
+
+def is_obj_in_list(obj, list):
+	for i in range(len(list)):
+		if(obj[0] == list[i][0]):
+			return i
+	return -1
+
+def create_row(obj, type):
+	name = obj[0]
+	#print(name)
+	item = []
+	if(type == "items"):
+		item.append(obj[3]) # date
+		item.append(obj[4]) # average_sold_price
+		# list of items on sell
+		items_prices = obj[5:]
+		items_prices = list(filter(None, items_prices))
+		#print(items_prices)
+		item.append(min(items_prices) if len(items_prices) >= 1 else "") # min_selling_price
+		item.append(max(items_prices) if len(items_prices) >= 1 else "") # max_selling_price
+		item.append(len(items_prices)) # number_on_sell
+		item.append(int(statistics.mean(items_prices)) if len(items_prices) > 1 else "") # mean
+		item.append(int(statistics.median(items_prices)) if len(items_prices) > 1 else "") # median
+		item.append(int(statistics.variance(items_prices)) if len(items_prices) > 1 else "") # variance
+		item.append(int(statistics.stdev(items_prices)) if len(items_prices) > 1 else "") # stdev
+	else:
+		item.append(obj[3]) # date
+		item.append(obj[4]) # average_sold_price
+		item.append(obj[8]) # min_selling_price
+		item.append(obj[5]) # per_1
+		item.append(obj[6]) # per_10
+		item.append(obj[7]) # per_100
+
+	return item
+
+def update_obj_csv(obj, type):
+	name = obj[0].replace(' ', '_').replace("'", '')
+	path_name = "./obj_csv/" + name + ".csv"
+
+	if(path.exists(path_name)):
+		new_row = create_row(obj, type)
+		date_new_row = get_datetime_from_string(obj[3])
+
+		# check if record already exist:
+		record_exist = False
+		with open(path_name, 'r') as f:
+			csv_reader = csv.reader(f)
+			next(csv_reader) # remove first line
+			for row in csv_reader:
+				date_csv_obj = get_datetime_from_string(row[0])
+				if(date_csv_obj == date_new_row):
+					record_exist = True
+
+		if(not record_exist):
+			with open(path_name, 'a') as f:
+				write = csv.writer(f)
+				write.writerow(new_row)
+				#print("%s add record" %(name))
+	else: # first time, file doesn't exist
+		with open(path_name, 'w+') as f:
+			write = csv.writer(f)
+
+			if(type == "rcs"):
+				write.writerow(["", "average_sold_price", "min_selling_price", "per_1", "per_10", "per_100"])
+			else:
+				write.writerow(["", "average_sold_price", "min_selling_price", "max_selling_price", "number_on_sell", "mean", "median", "variance", "stdev" ])
+
+			write.writerow(create_row(obj, type))
+			#print("%s add first record" %(name))
 
 ####################################################################################################
 # obj_type = "rcs" or "items"
@@ -22,7 +98,7 @@ def get_last_obj_prices(obj_type):
 		ret = wks.get_values(start='B3', end='J4000', returnas='matrix')
 	else:
 		wks = sht.worksheet_by_title("Prix HDV - Items")
-		ret = wks.get_values(start='B3', end='CP4000', returnas='matrix')
+		ret = wks.get_values(start='E3', end='CP4000', returnas='matrix')
 	return ret
 
 ####################################################################################################
@@ -134,13 +210,21 @@ def parse_csv_file(filename, list_name, list_type):
 
 				arr.append(get_min_price(price_1, price_10, price_100))
 			else: # items
+				# first let let 3 free rows (used for gdoc calculation)
+				#arr.append("")
+				#arr.append("")
+				#arr.append("")
+
 				row_size = len(row)
 				for i in range(11, row_size):
 					price_raw = row[i].replace(" ", "")
 					price = ""
 					if(price_raw.isdigit()):
 						price = int(price_raw)
-					arr.append(price)
+					if(price != ""):
+						arr.append(price)
+				for i in range (row_size, 150):
+					arr.append("")
 				
 			# then append it:
 			final_obj_list.append(arr)
